@@ -65,6 +65,7 @@ void GIA_TgaDecoder::init(uchar *object_ptr, size_t object_size)
 GIA_TgaErr GIA_TgaDecoder::validate_header(int max_width, int max_height)
 {
     if ( state == FSM_States::NotInitialized ) return GIA_TgaErr::NotInitialized;
+    if ( state == FSM_States::InvalidHeader ) return GIA_TgaErr::InvalidHeader;
     bool is_valid = true;
     if ( src_size < sizeof(GIA_TgaHeader) ) // в исходном объекте не хватает места на заголовок
     {
@@ -117,9 +118,9 @@ GIA_TgaErr GIA_TgaDecoder::validate_header(int max_width, int max_height)
         one_pix_size = one_pix_depth / 8;
         width = header->width;
         height = header->height;
-        bytes_per_line = width * 4; // раскодирование всегда в формат QImage::Format_ARGB32
+        bytes_per_line = width * 4; // раскодирование всегда в формат QImage::Format_RGBA8888
         total_size_p = width * height;
-        total_size_b = total_size_p * 4; // изображение любого типа всегда раскодируется в формат QImage::Format_ARGB32 0xAARRGGBB; в памяти (и файле) лежит так : BBGGRRAA
+        total_size_b = total_size_p * 4; // изображение любого типа всегда раскодируется в формат QImage::Format_RGBA8888 0xAARRGGBB; в памяти (и файле) лежит так : BBGGRRAA
         origin = GIA_TgaOrigin(header->img_descr & 0b00110000);
         alpha_bits = header->img_descr & 0b00001111;
         image_type = header->img_type;

@@ -178,6 +178,8 @@ GIA_TgaErr last_err = tga_decoder.validate_header();
 
 if ( last_err == GIA_TgaErr::ValidHeader )
 {
+	GIA_TgaInfo info = tga_decoder.info();
+	qDebug << "width:" << info.width << "; height:" << info.height;
 	last_err = tga_decoder.decode();
 	if ( last_err == GIA_TgaErr::Success )
 	{
@@ -200,3 +202,7 @@ else
 	qDebug() << tga_decoder.err_str(last_err);
 }
 ```
+## Лицензия и предупреждения
+Библиотеку можно использовать в некоммерческих проектах с открытым исходным кодом при условии упоминания ссылки на эту страницу.
+
+И, хотя была проведена большая работа по отладке, автор не несёт ответственности за возможные ошибки, поэтому используйте только на свой страх и риск. Запросы на исправления можно оставлять в разделе Issues или направлять на почту <fluorohead@gmail.com> . 

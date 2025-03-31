@@ -1,11 +1,10 @@
-#include "gia_tga_qt.h"
+#include "gia_tga_stl.h"
+#include <iostream>
 #include <cstring>
-#include <QtDebug>
-#include <QFile>
 
-namespace gia_tga_qt
+namespace gia_tga_stl
 {
-const QStringList GIA_TgaDecoder::err_strings = {   "format is not valid",
+const vector<string> GIA_TgaDecoder::err_strings = {"format is not valid",
                                                     "format is valid",
                                                     "truncated data during decoding",
                                                     "too much pixels in data, decoding aborted",
@@ -14,10 +13,11 @@ const QStringList GIA_TgaDecoder::err_strings = {   "format is not valid",
                                                     "not initialized",
                                                     "need validation before decoding",
                                                     "need to decode before data detaching"
-                                                };
-const QSet<quint8> GIA_TgaDecoder::valid_img_types = { 1, 2, 3, 9, 10, 11 };
-const QSet<quint8> GIA_TgaDecoder::valid_cmap_depths = { 15, 16, 24, 32 };
-const QSet<qint8> GIA_TgaDecoder::valid_pix_depths = { 8, 15, 16, 24, 32 };
+                                                    };
+
+const set<uint8_t> GIA_TgaDecoder::valid_img_types = { 1, 2, 3, 9, 10, 11 };
+const set<uint8_t> GIA_TgaDecoder::valid_cmap_depths = { 15, 16, 24, 32 };
+const set<int8_t> GIA_TgaDecoder::valid_pix_depths = { 8, 15, 16, 24, 32 };
 
 GIA_TgaDecoder::GIA_TgaDecoder()
 {
@@ -32,12 +32,12 @@ GIA_TgaDecoder::~GIA_TgaDecoder()
         delete [] dst_array;
 }
 
-void GIA_TgaDecoder::init(uchar *object_ptr, size_t object_size)
+void GIA_TgaDecoder::init(uint8_t *object_ptr, int64_t object_size)
 {
     if ( !is_data_detached ) delete [] dst_array;
     is_data_detached = false;
 
-    src_array = (quint8*)object_ptr;
+    src_array = object_ptr;
     src_size = object_size;
     header = (GIA_TgaHeader*)object_ptr;
     pix_data_offset = -1;
@@ -62,7 +62,7 @@ void GIA_TgaDecoder::init(uchar *object_ptr, size_t object_size)
 }
 
 // может возвращать ошибки : ValidHeader, InvalidHeader, NotInitialized
-GIA_TgaErr GIA_TgaDecoder::validate_header(int max_width, int max_height)
+GIA_TgaErr GIA_TgaDecoder::validate_header(uint16_t max_width, uint16_t max_height)
 {
     if ( state == FSM_States::NotInitialized ) return GIA_TgaErr::NotInitialized;
     if ( state == FSM_States::InvalidHeader ) return GIA_TgaErr::InvalidHeader;
@@ -74,16 +74,16 @@ GIA_TgaErr GIA_TgaDecoder::validate_header(int max_width, int max_height)
     else
     {
         if ( header->cmap_type > 1 ) is_valid = false; // неизвестный тип цветовой таблицы
-        if ( ( header->cmap_type == 1 ) and ( !valid_cmap_depths.contains(header->cmap_depth) ) ) is_valid = false; // есть таблица? проверяем битность её элементов
-        if ( !valid_img_types.contains(header->img_type) ) is_valid = false;
-        if ( !valid_pix_depths.contains(header->pix_depth) ) is_valid = false;
+        if ( ( header->cmap_type == 1 ) and ( valid_cmap_depths.find(header->cmap_depth) == valid_cmap_depths.end() ) ) is_valid = false; // есть таблица? проверяем битность её элементов
+        if ( valid_img_types.find(header->img_type) == valid_img_types.end() ) is_valid = false;
+        if ( valid_pix_depths.find(header->pix_depth) == valid_pix_depths.end() ) is_valid = false;
         if ( ( header->width == 0 ) or ( header->height == 0 ) ) is_valid = false;
     }
     if ( is_valid )
     {
         if ( ( header->img_type == 2 ) or ( header->img_type == 10 ) )
         {
-            quint8 alpha = header->img_descr & 0b00001111;
+            uint8_t alpha = header->img_descr & 0b00001111;
             if ( ( header->pix_depth == 15 ) and ( alpha > 0 ) ) is_valid = false;
             if ( ( header->pix_depth == 16 ) and ( alpha > 1 ) ) is_valid = false;
             if ( ( header->pix_depth == 24 ) and ( alpha > 0 ) ) is_valid = false;
@@ -128,19 +128,18 @@ GIA_TgaErr GIA_TgaDecoder::validate_header(int max_width, int max_height)
         cmap_elem_size = cmap_elem_depth / 8;
         cmap_len = header->cmap_len;
         id_string.clear();
-        for(quint8 id_idx; id_idx < header->id_len; ++id_idx)
+        for(uint8_t id_idx; id_idx < header->id_len; ++id_idx)
         {
             auto ch = src_array[sizeof(GIA_TgaHeader) + id_idx];
             if ( !ch ) break;
-            id_string += QChar(ch);
+            id_string += ch;
         }
-
     }
     state = is_valid ? FSM_States::HeaderValidated : FSM_States::InvalidHeader;
     return is_valid ? GIA_TgaErr::ValidHeader : GIA_TgaErr::InvalidHeader;
 }
 
-const QString& GIA_TgaDecoder::err_str(GIA_TgaErr err_code)
+const string& GIA_TgaDecoder::err_str(GIA_TgaErr err_code)
 {
     return err_strings[size_t(err_code)];
 }
@@ -159,7 +158,7 @@ GIA_TgaErr GIA_TgaDecoder::detach_data()
     }
 }
 
-uchar *GIA_TgaDecoder::data()
+uint8_t *GIA_TgaDecoder::data()
 {
     return dst_array;
 }
@@ -167,10 +166,11 @@ uchar *GIA_TgaDecoder::data()
 GIA_TgaInfo GIA_TgaDecoder::info()
 {
     bool is_footer_valid = true;
-    qint64 footer_offset = src_size - sizeof(footer);
+    int64_t footer_offset = src_size - sizeof(footer);
     footer *ftr;
     extensions_area *ext_area;
-    QString author_str, comment_str, job_str, software_str;
+    string author_str, comment_str, job_str, software_str;
+    size_t find_pos;
     if ( footer_offset <= pix_data_offset ) goto w_o_footer; // сигнатура футера не поместится в файл
     if ( memcmp(&(((footer*)&src_array[footer_offset])->signature), "TRUEVISION-XFILE\x2E\x00", 18) != 0 ) goto w_o_footer; // если 0 - сигнатура совпала
     ftr = (footer*)&src_array[footer_offset];
@@ -180,75 +180,75 @@ GIA_TgaInfo GIA_TgaDecoder::info()
     ext_area = (extensions_area*)&src_array[ftr->ext_offset];
     if ( ext_area->size < sizeof(extensions_area) ) goto w_o_footer; // неизвестный размер, лучше не пытаться прочитать такую область
 
-    author_str = QString::fromLocal8Bit(ext_area->author, sizeof(extensions_area::author));
-    author_str.chop(author_str.length() - author_str.indexOf('\x00')); // ищем где появляется нулевой символ и откусываем всё, что после него
+    author_str.assign(ext_area->author, sizeof(extensions_area::author));
+    author_str.erase(author_str.find('\x00'));
 
-    comment_str = QString::fromLocal8Bit(ext_area->comment, sizeof(extensions_area::comment));
-    comment_str.chop(comment_str.length() - comment_str.indexOf('\x00')); // ищем где появляется нулевой символ и откусываем всё, что после него
+    comment_str.assign(ext_area->comment, sizeof(extensions_area::comment));
+    comment_str.erase(comment_str.find('\x00'));
 
-    job_str = QString::fromLocal8Bit(ext_area->job, sizeof(extensions_area::job));
-    job_str.chop(job_str.length() - job_str.indexOf('\x00')); // ищем где появляется нулевой символ и откусываем всё, что после него
+    job_str.assign(ext_area->job, sizeof(extensions_area::job));
+    job_str.erase(job_str.find('\x00'));
 
-    software_str = QString::fromLocal8Bit(ext_area->software, sizeof(extensions_area::software));
-    software_str.chop(software_str.length() - software_str.indexOf('\x00')); // ищем где появляется нулевой символ и откусываем всё, что после него
+    software_str.assign(ext_area->software, sizeof(extensions_area::software));
+    software_str.erase(software_str.find('\x00'));
 
 w_footer:
     return GIA_TgaInfo{
-                        width,
-                        height,
-                        origin,
-                        one_pix_depth,
-                        bytes_per_line,
-                        total_size_b,
-                        image_type,
-                        id_string,
-                        {   author_str,
-                            comment_str,
-                            ext_area->stamp_month,
-                            ext_area->stamp_day,
-                            ext_area->stamp_year,
-                            ext_area->stamp_hour,
-                            ext_area->stamp_minute,
-                            ext_area->stamp_second,
-                            job_str,
-                            ext_area->job_hour,
-                            ext_area->job_minute,
-                            ext_area->job_second,
-                            software_str,
-                            ext_area->ver_num,
-                            ext_area->ver_lett,
-                            ext_area->key_color,
-                            ext_area->pix_numer,
-                            ext_area->pix_denom,
-                            ext_area->gamma_numer,
-                            ext_area->gamma_denom,
-                            ext_area->color_offset,
-                            ext_area->stamp_offset,
-                            ext_area->scan_offset,
-                            ext_area->attr_type }
-                        };
+        width,
+        height,
+        origin,
+        one_pix_depth,
+        bytes_per_line,
+        total_size_b,
+        image_type,
+        id_string,
+        {   author_str,
+         comment_str,
+         ext_area->stamp_month,
+         ext_area->stamp_day,
+         ext_area->stamp_year,
+         ext_area->stamp_hour,
+         ext_area->stamp_minute,
+         ext_area->stamp_second,
+         job_str,
+         ext_area->job_hour,
+         ext_area->job_minute,
+         ext_area->job_second,
+         software_str,
+         ext_area->ver_num,
+         ext_area->ver_lett,
+         ext_area->key_color,
+         ext_area->pix_numer,
+         ext_area->pix_denom,
+         ext_area->gamma_numer,
+         ext_area->gamma_denom,
+         ext_area->color_offset,
+         ext_area->stamp_offset,
+         ext_area->scan_offset,
+         ext_area->attr_type }
+    };
 
 w_o_footer:
     return GIA_TgaInfo{
-                        width,
-                        height,
-                        origin,
-                        one_pix_depth,
-                        bytes_per_line,
-                        total_size_b,
-                        image_type,
-                        id_string,
-                        { "", "", 0, 0, 0, 0, 0, 0, "", 0, 0, 0, "", 0, '\x00', 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-                        };
+        width,
+        height,
+        origin,
+        one_pix_depth,
+        bytes_per_line,
+        total_size_b,
+        image_type,
+        id_string,
+        { "", "", 0, 0, 0, 0, 0, 0, "", 0, 0, 0, "", 0, '\x00', 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    };
 }
 
 void GIA_TgaDecoder::flip_dia()
 {
-    auto array = (quint32*)dst_array;
-    quint32 swap_pixel;
-    qint64 half_size = total_size_p / 2;
-    qint64 last_idx = total_size_p;
-    for(qint64 fwd_idx = 0; fwd_idx < half_size; ++fwd_idx)
+    auto array = (uint32_t*)dst_array;
+    uint32_t swap_pixel;
+    int64_t half_size = total_size_p / 2;
+    int64_t last_idx = total_size_p;
+    for(int64_t fwd_idx = 0; fwd_idx < half_size; ++fwd_idx)
     {
         --last_idx;
         swap_pixel = array[fwd_idx];
@@ -259,18 +259,18 @@ void GIA_TgaDecoder::flip_dia()
 
 void GIA_TgaDecoder::flip_ver()
 {
-    auto array = (quint32*)dst_array;
-    quint32 swap_pixel;
-    quint16 half_fwd_scln = height / 2; // половина сканлиний
-    quint16 btm_scln = height; // нижняя сканлиния
-    quint32 *scln_fwd_ptr;
-    quint32 *scln_btm_ptr;
-    for(quint16 fwd_scln = 0; fwd_scln < half_fwd_scln; ++fwd_scln) // начинаем сверху по сканлиниям и до половины изображения
+    auto array = (uint32_t*)dst_array;
+    uint32_t swap_pixel;
+    uint16_t half_fwd_scln = height / 2; // половина сканлиний
+    uint16_t btm_scln = height; // нижняя сканлиния
+    uint32_t *scln_fwd_ptr;
+    uint32_t *scln_btm_ptr;
+    for(uint16_t fwd_scln = 0; fwd_scln < half_fwd_scln; ++fwd_scln) // начинаем сверху по сканлиниям и до половины изображения
     {
         --btm_scln;
         scln_fwd_ptr = &array[fwd_scln * width]; // указатель на верхнюю сканлинию
         scln_btm_ptr = &array[btm_scln * width]; // указатель на нижнюю сканлинию
-        for(qint64 pix_idx = 0; pix_idx < width; ++pix_idx) // идём по пикселям внутри сканлинии слева направо
+        for(int64_t pix_idx = 0; pix_idx < width; ++pix_idx) // идём по пикселям внутри сканлинии слева направо
         {
             swap_pixel = scln_fwd_ptr[pix_idx];
             scln_fwd_ptr[pix_idx] = scln_btm_ptr[pix_idx];
@@ -281,16 +281,16 @@ void GIA_TgaDecoder::flip_ver()
 
 void GIA_TgaDecoder::flip_hor()
 {
-    auto array = (quint32*)dst_array;
-    quint32 swap_pixel;
-    quint32 *scln_ptr;
-    quint16 half_scln = width / 2; // половина сканлинии
-    quint16 rpix_idx;
-    for(quint16 scln = 0; scln < height; ++scln) // идём по всем сканлиниям сверху вниз
+    auto array = (uint32_t*)dst_array;
+    uint32_t swap_pixel;
+    uint32_t *scln_ptr;
+    uint16_t half_scln = width / 2; // половина сканлинии
+    uint16_t rpix_idx;
+    for(uint16_t scln = 0; scln < height; ++scln) // идём по всем сканлиниям сверху вниз
     {
         scln_ptr = &array[scln * width]; // указатель на текущую сканлинию
         rpix_idx = width;
-        for(quint16 lpix_idx = 0; lpix_idx < half_scln; ++lpix_idx)
+        for(uint16_t lpix_idx = 0; lpix_idx < half_scln; ++lpix_idx)
         {
             --rpix_idx;
             swap_pixel = scln_ptr[lpix_idx];
@@ -320,10 +320,10 @@ void GIA_TgaDecoder::flip()
     }
 }
 
-inline void GIA_TgaDecoder::fill_with_dword(quint32 value, void *dst_start, quint8 count)
+inline void GIA_TgaDecoder::fill_with_dword(uint32_t value, void *dst_start, uint8_t count)
 {
-    auto dst_as_dwords = (quint32*)dst_start;
-    for(quint8 idx = 0; idx < count; ++idx)
+    auto dst_as_dwords = (uint32_t*)dst_start;
+    for(uint8_t idx = 0; idx < count; ++idx)
     {
         dst_as_dwords[idx] = value;
     }
@@ -331,29 +331,16 @@ inline void GIA_TgaDecoder::fill_with_dword(quint32 value, void *dst_start, quin
 
 void GIA_TgaDecoder::fill_with_zeroes()
 {
-    auto qwords_array = (quint64*)dst_array;
-    qint64 max_pix_duplets = total_size_p / 2; // количество двойных пикселей
-    for(qint64 qw_idx = 0; qw_idx < max_pix_duplets; ++qw_idx) // идём по двойным пикселям
+    auto qwords_array = (uint64_t*)dst_array;
+    int64_t max_pix_duplets = total_size_p / 2; // количество двойных пикселей
+    for(int64_t qw_idx = 0; qw_idx < max_pix_duplets; ++qw_idx) // идём по двойным пикселям
     {
         qwords_array[qw_idx] = 0xFF000000'FF000000;
     }
     if ( total_size_p % 2 ) // остался одиночный пиксель?
     {
-        *((quint32*)&qwords_array[max_pix_duplets]) = 0xFF000000;
+        *((uint32_t*)&qwords_array[max_pix_duplets]) = 0xFF000000;
     }
-}
-
-void GIA_TgaDecoder::dump_to_file()
-{
-    QFile file(R"(c:\Downloads\dump01.dat)");
-    file.open(QIODeviceBase::ReadWrite);
-    file.resize(total_size_b);
-    uchar *mmf_ptr = file.map(0, file.size());
-
-    std::memcpy(mmf_ptr, dst_array, total_size_b);
-
-    file.unmap(mmf_ptr);
-    file.close();
 }
 
 // может возвращать ошибки : TruncDataAbort, TooMuchPixAbort, Success, MemAllocErr, NeedHeaderValidation
@@ -364,7 +351,7 @@ GIA_TgaErr GIA_TgaDecoder::decode()
     if ( !is_data_detached ) delete [] dst_array;
     is_data_detached = false;
 
-    dst_array = new (std::nothrow) quint8[total_size_b];
+    dst_array = new (std::nothrow) uint8_t[total_size_b];
 
     if ( dst_array == nullptr )
     {
@@ -436,16 +423,16 @@ GIA_TgaErr GIA_TgaDecoder::create_cmap_256()
     }
 
     /// обнуление палитры (потому что в файле она может быть короче 256 элементов)
-    for(quint16 cm_dw_idx = 0; cm_dw_idx < 32; ++cm_dw_idx)
+    for(uint16_t cm_dw_idx = 0; cm_dw_idx < 32; ++cm_dw_idx)
     {
-        ((quint64*)color_map)[cm_dw_idx] = 0xFF000000FF000000;
+        ((uint64_t*)color_map)[cm_dw_idx] = 0xFF000000FF000000;
     }
     switch(cmap_elem_depth)
     {
     case 24:
     {
         auto trp_cm_array = (triplet*)&src_array[cmap_offset];
-        for(quint16 cm_idx = 0; cm_idx < cmap_len; ++cm_idx)
+        for(uint16_t cm_idx = 0; cm_idx < cmap_len; ++cm_idx)
         {
             color_map[cm_idx].BBGGRR = trp_cm_array[cm_idx];
             color_map[cm_idx].AA = 0xFF;
@@ -455,7 +442,7 @@ GIA_TgaErr GIA_TgaDecoder::create_cmap_256()
     case 32:
     {
         auto dw_cm_array = (bbggrraa*)&src_array[cmap_offset];
-        for(quint16 cm_idx = 0; cm_idx < cmap_len; ++cm_idx)
+        for(uint16_t cm_idx = 0; cm_idx < cmap_len; ++cm_idx)
         {
             color_map[cm_idx] = dw_cm_array[cm_idx];
         }
@@ -472,15 +459,15 @@ GIA_TgaErr GIA_TgaDecoder::decode_cm_8()
         state = FSM_States::NotEnoughMem;
         return GIA_TgaErr::MemAllocErr;
     }
-    qint64 need_src_size = width * height; // требуемое количество исходных байт
-    qint64 remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
+    int64_t need_src_size = width * height; // требуемое количество исходных байт
+    int64_t remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
     bool truncated = remain_size < need_src_size;
     if ( !truncated ) remain_size = need_src_size;
-    quint8 *src_b_array = &src_array[pix_data_offset]; // bytes array
+    uint8_t *src_b_array = &src_array[pix_data_offset]; // bytes array
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
-    auto dst_dw_array = (quint32*)dst_array; // destination dwords array
-    for(qint64 b_idx; b_idx < remain_size; ++b_idx)
+    auto dst_dw_array = (uint32_t*)dst_array; // destination dwords array
+    for(int64_t b_idx; b_idx < remain_size; ++b_idx)
     {
         dst_dw_array[b_idx] = color_map[src_b_array[b_idx]].dword;
     }
@@ -504,12 +491,12 @@ GIA_TgaErr GIA_TgaDecoder::decode_cm_rle8()
         state = FSM_States::NotEnoughMem;
         return GIA_TgaErr::MemAllocErr;
     }
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
     do {
         /// хватает ли места для очередного счётчика группы ?
         if ( rle_size - src_idx < 1 ) { delete [] color_map; state = FSM_States::DecodingAbort; return GIA_TgaErr::TruncDataAbort; } // досрочный выход из цикла : нехватка байтов исходных данных
@@ -541,10 +528,10 @@ GIA_TgaErr GIA_TgaDecoder::decode_cm_rle8()
             if ( rle_size - src_idx >= group_cnt ) // хватает ли места в исходном буфере на group_cnt байтов пикселей?
             {
                 /// копирование байтов пикселей
-                auto src_b_array = (quint8*)&rle_array[src_idx]; // array of bytes
-                for(qint64 b_idx = 0; b_idx < group_cnt; ++b_idx)
+                auto src_b_array = (uint8_t*)&rle_array[src_idx]; // array of bytes
+                for(int64_t b_idx = 0; b_idx < group_cnt; ++b_idx)
                 {
-                    *((quint32*)&dst_array[dst_idx + (b_idx << 2)]) = color_map[src_b_array[b_idx]].dword; // b_idx*4
+                    *((uint32_t*)&dst_array[dst_idx + (b_idx << 2)]) = color_map[src_b_array[b_idx]].dword; // b_idx*4
                 }
                 ///
                 src_idx += group_cnt; // перестановка на следующий счётчик группы
@@ -568,15 +555,15 @@ GIA_TgaErr GIA_TgaDecoder::decode_cm_rle8()
 
 GIA_TgaErr GIA_TgaDecoder::decode_gr_8()
 {
-    qint64 need_src_size = width * height; // требуемое количество исходных байт
-    qint64 remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
+    int64_t need_src_size = width * height; // требуемое количество исходных байт
+    int64_t remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
     bool truncated = remain_size < need_src_size;
     if ( !truncated ) remain_size = need_src_size;
-    quint8 *src_b_array = &src_array[pix_data_offset]; // bytes array
+    uint8_t *src_b_array = &src_array[pix_data_offset]; // bytes array
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
-    auto dst_dw_array = (quint32*)dst_array; // destination dwords array
-    for(qint64 b_idx; b_idx < remain_size; ++b_idx)
+    auto dst_dw_array = (uint32_t*)dst_array; // destination dwords array
+    for(int64_t b_idx; b_idx < remain_size; ++b_idx)
     {
         four_bytes.BBGGRR.BB = src_b_array[b_idx];
         four_bytes.BBGGRR.GG = four_bytes.BBGGRR.BB;
@@ -597,12 +584,12 @@ GIA_TgaErr GIA_TgaDecoder::decode_gr_8()
 
 GIA_TgaErr GIA_TgaDecoder::decode_gr_rle8()
 {
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
     do {
@@ -638,13 +625,13 @@ GIA_TgaErr GIA_TgaDecoder::decode_gr_rle8()
             if ( rle_size - src_idx >= group_cnt ) // хватает ли места в исходном буфере на group_cnt байтов пикселей?
             {
                 /// копирование байтов пикселей
-                auto src_b_array = (quint8*)&rle_array[src_idx]; // array of bytes
-                for(qint64 b_idx = 0; b_idx < group_cnt; ++b_idx)
+                auto src_b_array = (uint8_t*)&rle_array[src_idx]; // array of bytes
+                for(int64_t b_idx = 0; b_idx < group_cnt; ++b_idx)
                 {
                     four_bytes.BBGGRR.BB = src_b_array[b_idx];
                     four_bytes.BBGGRR.GG = four_bytes.BBGGRR.BB;
                     four_bytes.BBGGRR.RR = four_bytes.BBGGRR.BB;
-                    *((quint32*)&dst_array[dst_idx + (b_idx << 2)]) = four_bytes.dword; // b_idx*4
+                    *((uint32_t*)&dst_array[dst_idx + (b_idx << 2)]) = four_bytes.dword; // b_idx*4
                 }
                 ///
                 src_idx += group_cnt; // перестановка на следующий счётчик группы
@@ -666,22 +653,22 @@ GIA_TgaErr GIA_TgaDecoder::decode_gr_rle8()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_15()
 {
-    qint64 need_src_size = (width * height) << 1; // требуемое количество исходных байт : (w*h*2)
-    qint64 remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
+    int64_t need_src_size = (width * height) << 1; // требуемое количество исходных байт : (w*h*2)
+    int64_t remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
     bool truncated = remain_size < need_src_size;
     if ( !truncated ) remain_size = need_src_size;
-    qint64 calc_size = remain_size & 0xFFFFFFFE; // нормализация размера исходных данных к границе 2 байт (обнуление 0 бита)
-    qint64 max_words = calc_size >> 1;
+    int64_t calc_size = remain_size & 0xFFFFFFFE; // нормализация размера исходных данных к границе 2 байт (обнуление 0 бита)
+    int64_t max_words = calc_size >> 1;
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
-    quint8 blue, green, red;
-    auto src_w_array = (quint16*)&src_array[pix_data_offset]; // source words array
-    auto dst_dw_array = (quint32*)dst_array; // destination dwords array
-    for(qint64 w_idx = 0; w_idx < max_words; ++w_idx)
+    uint8_t blue, green, red;
+    auto src_w_array = (uint16_t*)&src_array[pix_data_offset]; // source words array
+    auto dst_dw_array = (uint32_t*)dst_array; // destination dwords array
+    for(int64_t w_idx = 0; w_idx < max_words; ++w_idx)
     {
-        blue = (quint8) ( src_w_array[w_idx] & 0b00000000'00011111 );
-        green = (quint8) ( ( src_w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
-        red = (quint8) ( ( src_w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
+        blue = (uint8_t) ( src_w_array[w_idx] & 0b00000000'00011111 );
+        green = (uint8_t) ( ( src_w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
+        red = (uint8_t) ( ( src_w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
         four_bytes.BBGGRR.BB = ( blue << 3 ) | ( blue >> 2 );
         four_bytes.BBGGRR.GG = ( green << 3 ) | ( green >> 2 );
         four_bytes.BBGGRR.RR = ( red << 3 ) | ( red >> 2 );
@@ -701,21 +688,21 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_15()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_16()
 {
-    qint64 need_src_size = (width * height) << 1; // требуемое количество исходных байт : (w*h*2)
-    qint64 remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
+    int64_t need_src_size = (width * height) << 1; // требуемое количество исходных байт : (w*h*2)
+    int64_t remain_size = src_size - pix_data_offset; // фактическое количество исходных байт
     bool truncated = remain_size < need_src_size;
     if ( !truncated ) remain_size = need_src_size;
-    qint64 calc_size = remain_size & 0xFFFFFFFE; // нормализация размера исходных данных к границе 2 байт (обнуление 0 бита)
-    qint64 max_words = calc_size >> 1;
+    int64_t calc_size = remain_size & 0xFFFFFFFE; // нормализация размера исходных данных к границе 2 байт (обнуление 0 бита)
+    int64_t max_words = calc_size >> 1;
     bbggrraa four_bytes;
-    quint8 blue, green, red;
-    auto src_w_array = (quint16*)&src_array[pix_data_offset]; // source words array
-    auto dst_dw_array = (quint32*)dst_array; // destination dwords array
-    for(qint64 w_idx = 0; w_idx < max_words; ++w_idx)
+    uint8_t blue, green, red;
+    auto src_w_array = (uint16_t*)&src_array[pix_data_offset]; // source words array
+    auto dst_dw_array = (uint32_t*)dst_array; // destination dwords array
+    for(int64_t w_idx = 0; w_idx < max_words; ++w_idx)
     {
-        blue = (quint8) ( src_w_array[w_idx] & 0b00000000'00011111 );
-        green = (quint8) ( ( src_w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
-        red = (quint8) ( ( src_w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
+        blue = (uint8_t) ( src_w_array[w_idx] & 0b00000000'00011111 );
+        green = (uint8_t) ( ( src_w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
+        red = (uint8_t) ( ( src_w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
         four_bytes.BBGGRR.BB = ( blue << 3 ) | ( blue >> 2 );
         four_bytes.BBGGRR.GG = ( green << 3 ) | ( green >> 2 );
         four_bytes.BBGGRR.RR = ( red << 3 ) | ( red >> 2 );
@@ -736,17 +723,17 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_16()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_24()
 {
-    qint64 need_src_size = width * height * 3; // требуемое количество исходных байт
-    qint64 remain_size = src_size - pix_data_offset;
+    int64_t need_src_size = width * height * 3; // требуемое количество исходных байт
+    int64_t remain_size = src_size - pix_data_offset;
     bool truncated = remain_size < need_src_size;
     if ( !truncated ) remain_size = need_src_size;
-    qint64 calc_size = (remain_size / 3) * 3; // нормализация размера исходных данных к границе 3 байт
-    qint64 max_triplets = calc_size / 3;
+    int64_t calc_size = (remain_size / 3) * 3; // нормализация размера исходных данных к границе 3 байт
+    int64_t max_triplets = calc_size / 3;
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
     auto src_trp_array = (triplet*)&src_array[pix_data_offset]; // source triplets array
-    auto dst_dw_array = (quint32*)dst_array; // destination dwords array
-    for(qint64 trp_idx = 0; trp_idx < max_triplets; ++trp_idx)
+    auto dst_dw_array = (uint32_t*)dst_array; // destination dwords array
+    for(int64_t trp_idx = 0; trp_idx < max_triplets; ++trp_idx)
     {
         four_bytes.BBGGRR = src_trp_array[trp_idx];
         dst_dw_array[trp_idx] = four_bytes.dword;
@@ -765,11 +752,11 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_24()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_32()
 {
-    qint64 remain_size = src_size - pix_data_offset;
+    int64_t remain_size = src_size - pix_data_offset;
     bool truncated = remain_size < total_size_b;
     if ( !truncated ) remain_size = total_size_b;
-    qint64 calc_size = remain_size & 0xFFFFFFFC; // нормализация размера исходных данных к границе 4 байт (обнуление 2 младших битов)
-    std::memcpy(dst_array, &src_array[pix_data_offset], calc_size);
+    int64_t calc_size = remain_size & 0xFFFFFFFC; // нормализация размера исходных данных к границе 4 байт (обнуление 2 младших битов)
+    memcpy(dst_array, &src_array[pix_data_offset], calc_size);
     if ( truncated )
     {
         state = FSM_States::DecodingAbort;
@@ -784,15 +771,15 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_32()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_rle15()
 {
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
-    qint64 not_packed_bytes;
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
+    int64_t not_packed_bytes;
     bbggrraa four_bytes;
-    quint8 blue, green, red;
+    uint8_t blue, green, red;
     four_bytes.AA = 0xFF;
     do {
         /// хватает ли места для очередного счётчика группы ?
@@ -831,16 +818,16 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle15()
             if ( rle_size - src_idx >= not_packed_bytes ) // хватает ли места в исходном буфере на group_cnt*2 байтов пикселей?
             {
                 /// копирование байтов пикселей
-                auto w_array = (quint16*)&rle_array[src_idx]; // array of words
-                for(qint64 w_idx = 0; w_idx < group_cnt; ++w_idx)
+                auto w_array = (uint16_t*)&rle_array[src_idx]; // array of words
+                for(int64_t w_idx = 0; w_idx < group_cnt; ++w_idx)
                 {
-                    blue = (quint8) ( w_array[w_idx] & 0b00000000'00011111 );
-                    green = (quint8) ( ( w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
-                    red = (quint8) ( ( w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
+                    blue = (uint8_t) ( w_array[w_idx] & 0b00000000'00011111 );
+                    green = (uint8_t) ( ( w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
+                    red = (uint8_t) ( ( w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
                     four_bytes.BBGGRR.BB = ( blue << 3 ) | ( blue >> 2 );
                     four_bytes.BBGGRR.GG = ( green << 3 ) | ( green >> 2 );
                     four_bytes.BBGGRR.RR = ( red << 3 ) | ( red >> 2 );
-                    *((quint32*)&dst_array[dst_idx + (w_idx << 2)]) = four_bytes.dword; // w_idx*4
+                    *((uint32_t*)&dst_array[dst_idx + (w_idx << 2)]) = four_bytes.dword; // w_idx*4
                 }
                 ///
                 src_idx += not_packed_bytes; // перестановка на следующий счётчик группы
@@ -862,15 +849,15 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle15()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_rle16()
 {
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
-    qint64 not_packed_bytes;
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
+    int64_t not_packed_bytes;
     bbggrraa four_bytes;
-    quint8 blue, green, red;
+    uint8_t blue, green, red;
     do {
         /// хватает ли места для очередного счётчика группы ?
         if ( rle_size - src_idx < 1 ) { state = FSM_States::DecodingAbort; return GIA_TgaErr::TruncDataAbort; } // досрочный выход из цикла : нехватка байтов исходных данных
@@ -909,17 +896,17 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle16()
             if ( rle_size - src_idx >= not_packed_bytes ) // хватает ли места в исходном буфере на group_cnt*2 байтов пикселей?
             {
                 /// копирование байтов пикселей
-                auto w_array = (quint16*)&rle_array[src_idx]; // array of words
-                for(qint64 w_idx = 0; w_idx < group_cnt; ++w_idx)
+                auto w_array = (uint16_t*)&rle_array[src_idx]; // array of words
+                for(int64_t w_idx = 0; w_idx < group_cnt; ++w_idx)
                 {
-                    blue = (quint8) ( w_array[w_idx] & 0b00000000'00011111 );
-                    green = (quint8) ( ( w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
-                    red = (quint8) ( ( w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
+                    blue = (uint8_t) ( w_array[w_idx] & 0b00000000'00011111 );
+                    green = (uint8_t) ( ( w_array[w_idx] >> 5 ) & 0b00000000'00011111 );
+                    red = (uint8_t) ( ( w_array[w_idx] >> 10 ) & 0b00000000'00011111 );
                     four_bytes.BBGGRR.BB = ( blue << 3 ) | ( blue >> 2 );
                     four_bytes.BBGGRR.GG = ( green << 3 ) | ( green >> 2 );
                     four_bytes.BBGGRR.RR = ( red << 3 ) | ( red >> 2 );
                     four_bytes.AA = ( (w_array[w_idx] & 0b10000000'00000000) == 0b10000000'00000000 ) ? 0 : 255;
-                    *((quint32*)&dst_array[dst_idx + (w_idx << 2)]) = four_bytes.dword; // w_idx*4
+                    *((uint32_t*)&dst_array[dst_idx + (w_idx << 2)]) = four_bytes.dword; // w_idx*4
                 }
                 ///
                 src_idx += not_packed_bytes; // перестановка на следующий счётчик группы
@@ -941,13 +928,13 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle16()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_rle24()
 {
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
-    qint64 not_packed_bytes;
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
+    int64_t not_packed_bytes;
     bbggrraa four_bytes;
     four_bytes.AA = 0xFF;
     do {
@@ -982,10 +969,10 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle24()
             if ( rle_size - src_idx >= not_packed_bytes ) // хватает ли места в исходном буфере на group_cnt*3 байтов пикселей?
             {
                 /// копирование байтов пикселей
-                for(qint64 trp_idx = 0; trp_idx < group_cnt; ++trp_idx)
+                for(int64_t trp_idx = 0; trp_idx < group_cnt; ++trp_idx)
                 {
                     four_bytes.BBGGRR = ((triplet*)&rle_array[src_idx])[trp_idx];
-                    *((quint32*)&dst_array[dst_idx + (trp_idx << 2)]) = four_bytes.dword; // trp_idx*4
+                    *((uint32_t*)&dst_array[dst_idx + (trp_idx << 2)]) = four_bytes.dword; // trp_idx*4
                 }
                 ///
                 src_idx += not_packed_bytes; // перестановка на следующий счётчик группы
@@ -1007,13 +994,13 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle24()
 
 GIA_TgaErr GIA_TgaDecoder::decode_tc_rle32()
 {
-    quint8 *rle_array = &src_array[pix_data_offset];
-    qint64 rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
-    qint64 src_idx = 0; // byte index in rle_array
-    qint64 dst_idx = 0; // byte index in dst_array
-    qint64 pix_cnt = 0; // decoded pixels counter
-    qint64 group_cnt; // group counter for rle or non-rle pixels
-    qint64 not_packed_bytes;
+    uint8_t *rle_array = &src_array[pix_data_offset];
+    int64_t rle_size = src_size - pix_data_offset; // rle array size (from pix_data_offset to the end of source file)
+    int64_t src_idx = 0; // byte index in rle_array
+    int64_t dst_idx = 0; // byte index in dst_array
+    int64_t pix_cnt = 0; // decoded pixels counter
+    int64_t group_cnt; // group counter for rle or non-rle pixels
+    int64_t not_packed_bytes;
     do {
         /// хватает ли места для очередного счётчика группы ?
         if ( rle_size - src_idx < 1 ) { state = FSM_States::DecodingAbort; return GIA_TgaErr::TruncDataAbort; } // досрочный выход из цикла : нехватка байтов исходных данных
@@ -1028,7 +1015,7 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle32()
             if ( rle_size - src_idx >= 4 ) // хватает ли места в исходном буфере на 4 байта пикселя?
             {
                 /// мультипликация байтов пикселя
-                fill_with_dword(*((quint32*)&rle_array[src_idx]), &dst_array[dst_idx], group_cnt);
+                fill_with_dword(*((uint32_t*)&rle_array[src_idx]), &dst_array[dst_idx], group_cnt);
                 ///
                 src_idx += 4; // перестановка на следующий счётчик группы
             }
@@ -1045,7 +1032,7 @@ GIA_TgaErr GIA_TgaDecoder::decode_tc_rle32()
             if ( rle_size - src_idx >= not_packed_bytes ) // хватает ли места в исходном буфере на group_cnt*4 байтов пикселей?
             {
                 /// копирование байтов пикселей
-                std::memcpy(&dst_array[dst_idx], &rle_array[src_idx], not_packed_bytes);
+                memcpy(&dst_array[dst_idx], &rle_array[src_idx], not_packed_bytes);
                 ///
                 src_idx += not_packed_bytes; // перестановка на следующий счётчик группы
             }

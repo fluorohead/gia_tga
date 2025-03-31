@@ -185,7 +185,7 @@ public:
     GIA_TgaErr detach_data(); // отсоединяет от себя указатель на dst_array
     uchar* data(); // возвращает указатель на dst_array
     GIA_TgaInfo info(); // возвращает свойства tga-объекта
-    void flip(); // переворачивае изображение к нормальному, если origin отличается от TopLeft
+    void flip(); // переворачивает изображение к нормальному, если origin отличается от TopLeft
 };
 
 }

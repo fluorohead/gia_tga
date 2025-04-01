@@ -1,6 +1,6 @@
 #include "gia_tga_stl.h"
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 namespace gia_tga_stl
 {
@@ -120,7 +120,7 @@ GIA_TgaErr GIA_TgaDecoder::validate_header(uint16_t max_width, uint16_t max_heig
         height = header->height;
         bytes_per_line = width * 4; // раскодирование всегда в формат 0xAARRGGBB (little-endian)
         total_size_p = width * height;
-        total_size_b = total_size_p * 4; // изображение любого типа всегда раскодируется в формат 0xAARRGGBB; в памяти (и файле) лежит так : BBGGRRAA
+        total_size_b = total_size_p * 4; // изображение любого типа всегда раскодируется в формат 0xAARRGGBB; в памяти (и файле) лежит так : BB GG RR AA
         origin = GIA_TgaOrigin(header->img_descr & 0b00110000);
         alpha_bits = header->img_descr & 0b00001111;
         image_type = header->img_type;

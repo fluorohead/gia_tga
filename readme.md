@@ -45,7 +45,7 @@
 **Автомат конечных состояний класса GIA_TgaDecoder :**
 
 ```mermaid
-graph TD;
+graph LR;
 c{constructor}--construction-->NotInitialized;
 NotInitialized--init-->Initialized;
 NotInitialized--destruction-->d{destructor};
